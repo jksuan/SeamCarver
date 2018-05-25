@@ -1,11 +1,11 @@
 import edu.princeton.cs.algs4.Picture;
+import edu.princeton.cs.algs4.Stack;
 import java.awt.Color;
 
 public class SeamCarver {
   private final Picture picture;
   private int width;     // width of current picture
   private int height;    // height of current picture  
-  // private Color[] pixel;
   private Color[][] initColors; // preserve the color info of the current picture
   private double[][] initEnergies;
   
@@ -44,9 +44,6 @@ public class SeamCarver {
     for (int col = 0; col < width; col++) {
       for (int row = 0; row < height; row++) {
         Color color = initColors[col][row];
-        // int red = color.getRed();
-        // int green = color.getGreen();
-        // int blue = color.getBlue();
         pic.set(col, row, color);
       }
     }
@@ -127,7 +124,13 @@ public class SeamCarver {
     }
     return colors;
   }  
-    
+  
+  /**
+   * transpose the energy of the current picture
+   * 
+   * @param width
+   * @param height
+   */
   private double[][] transposeEnergy(int width, int height) {
     double[][] energies = new double[width][height];
     for (int col = 0; col < width; col++) {
@@ -154,7 +157,7 @@ public class SeamCarver {
   public int[] findHorizontalSeam() {
     int tmpWidth = this.width;
     int tmpHeight = this.height;
-    int[] seam = new int[height];
+    int[] seam;
     
     transposePic(tmpHeight, tmpWidth); // swap the width and height
     seam = findVerticalSeam();
@@ -162,48 +165,82 @@ public class SeamCarver {
                                                  
     return seam;
   }  
- 
+  
   //sequence of indices for vertical seam 
   public int[] findVerticalSeam() {
     int[] seam = new int[height];    
-    int[] tmpSeam = new int[height];
-    double minEnergy = Double.POSITIVE_INFINITY;
+    int[][] edgeTo = new int[width][height];
+    double[][] distTo = new double[width][height];
     
     for (int col = 0; col < width; col++) {
-      double seamEnergy = 0;
-      int column = col;
       for (int row = 0; row < height; row++) {
-        double leftDownEnergy = Double.POSITIVE_INFINITY;
-        double rightDownEnergy = Double.POSITIVE_INFINITY;
-        double downEnergy = Double.POSITIVE_INFINITY; 
-        double tempEnergy = seamEnergy;  // preserve previous energy
-        
-        downEnergy = tempEnergy + initEnergies[column][row];
-        if (column > 0) 
-          leftDownEnergy = tempEnergy + initEnergies[column-1][row];
-        if (column < width - 1)
-          rightDownEnergy = tempEnergy + initEnergies[column+1][row];
-        
-        // 保存最小能量的seam以及当前像素点所在的列  
-        seamEnergy = leftDownEnergy;  // leftDownEnergy is the base to compare the other two
-        tmpSeam[row] = column - 1;              
-        if (seamEnergy > downEnergy) { 
-          seamEnergy = downEnergy; 
-          tmpSeam[row] = column;
+        if (row == 0) {
+          distTo[col][row] = 1000.0;
+          edgeTo[col][row] = col;
+        } else {
+          distTo[col][row] = Double.POSITIVE_INFINITY;
+          edgeTo[col][row] = 0;
         }
-        if (seamEnergy > rightDownEnergy) {
-          seamEnergy = rightDownEnergy;
-          tmpSeam[row] = column + 1;
-        }
-        column = tmpSeam[row];  
-      
-      }
-      if (minEnergy > seamEnergy) {
-        minEnergy = seamEnergy;
-        System.arraycopy(tmpSeam, 0, seam, 0, height);
       }
     }
+    
+    for (int row = 0; row < height - 1; row++) {
+      for (int col = 0; col < width - 1; col++) {
+        int pos = col - 1;
+        if (pos < 0) {
+          pos = 0;
+        }
+        for (; pos < col + 2; pos++) {
+          if (distTo[pos][row + 1] > distTo[col][row] + initEnergies[pos][row + 1]) {
+            distTo[pos][row + 1] = distTo[col][row] + initEnergies[pos][row + 1];
+            edgeTo[pos][row + 1] = col; // record the parent point  
+          }
+        } // end pos
+      } // end col
+    } // end row
+    
+    /*for (int row = 0; row < height; row++) {
+      for (int col = 0; col < width; col++) {
+        System.out.print(distTo[col][row] + " ");
+      }
+      System.out.println();
+    }
+    
+    System.out.println();
+    for (int row = 0; row < height; row++) {
+      for (int col = 0; col < width; col++) {
+        System.out.print(edgeTo[col][row] + " ");
+      }
+      System.out.println();
+    }*/
+    
+    double minEnergy = distTo[0][height - 1];
+    int bottomPoint = 0;
+    for (int col = 0; col < width; col++) {
+      if (minEnergy > distTo[col][height - 1]) {
+        minEnergy = distTo[col][height - 1];
+        bottomPoint = col;
+      }
+    }
+    
+    Stack<Integer> reverseSeam = new Stack<Integer>();
+    reverseSeam.push(bottomPoint);
+    for (int row = height - 1; row > 0; row--) {
+      int otherPoint = reverseSeam.peek();
+      reverseSeam.push(edgeTo[otherPoint][row]);
+    }
+    
+    for (int row = 0; row < height; row++) {
+      seam[row] = reverseSeam.pop();
+    }   
+    
     return seam;
+  }
+  
+  private void validatePictureWidth() {
+    if (width() <= 1) {
+      throw new IllegalArgumentException("The width of picture must not be less than 1");
+    }
   }
   
   private void validateVerticalSeam(int[] seam) {
@@ -229,6 +266,7 @@ public class SeamCarver {
   
   // remove vertical seam from current picture
   public void removeVerticalSeam(int[] seam) {
+    validatePictureWidth();
     validateVerticalSeam(seam);
     int tmpWidth = this.width;
     int tmpHeight = this.height;
@@ -257,6 +295,12 @@ public class SeamCarver {
     this.width--;
   }
   
+  private void validatePictureHeight() {
+    if (height() <= 1) {
+      throw new IllegalArgumentException("The height of picture must not be less than 1");
+    }
+  }
+  
   private void validateHorizontalSeam(int[] seam) {
     if (seam == null) {
       throw new IllegalArgumentException("Vertical seam must not be null");
@@ -280,7 +324,9 @@ public class SeamCarver {
   
   //remove horizontal seam from current picture
   public void removeHorizontalSeam(int[] seam) {
+    validatePictureHeight();
     validateHorizontalSeam(seam);
+    
     for (int col = 0; col < seam.length; col++) {
       int srcPos = seam[col] + 1;
       int destPos = seam[col];
