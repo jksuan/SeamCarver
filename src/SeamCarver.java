@@ -35,6 +35,7 @@ import java.awt.Color;
  *  For additional documentation, see
  *  <i>/specifications/specification-Programming_Assignment 2_ SeamCarving.html</i>
  *  <i>/specifications/Checklists-Programming_Assignment 2_ SeamCarving.html</i>
+ *  <i>Algorithms (4th Edition) by Robert Sedgewick, AcyclicSP.java in page 660</i>
  *  
  *  @author Chihkai Sun, email: jksuan@163.com
  *  @date 29th May 2018
