@@ -98,6 +98,17 @@ public class SeamCarverTest {
       energy = energy + sc.energy(seam[i], i); 
     }
     assertEquals(3443.20, energy, 0.01);
+    
+    assertEquals(2, seam[0]);
+    assertEquals(3, seam[1]);
+    assertEquals(4, seam[2]);
+    assertEquals(3, seam[3]);
+    assertEquals(4, seam[4]);
+    assertEquals(3, seam[5]);
+    assertEquals(3, seam[6]);
+    assertEquals(2, seam[7]);
+    assertEquals(2, seam[8]);
+    assertEquals(1, seam[9]);
   }
   
    

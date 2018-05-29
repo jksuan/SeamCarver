@@ -1,89 +1,138 @@
+/******************************************************************************
+ *  Compilation:  javac SeamCarver.java
+ *  Execution:    java SeamCarver *.png
+ *  Dependencies: edu.princeton.cs.algs4.Picture
+ *                edu.princeton.cs.algs4.Stack;
+ *                java.awt.Color;
+ *                
+ *  Data files:   /seam-testing/6x5.png
+ *                /seam-testing/7x10.png
+ *                /seam-testing/1x8.png 
+ *                /seam-testing/8x1.png 
+ ******************************************************************************/
+
 import edu.princeton.cs.algs4.Picture;
 import edu.princeton.cs.algs4.Stack;
 import java.awt.Color;
+
+/**
+ *  Note: 
+ *  1. Reserve the RGB to a 2D array, and maintain it, 
+ *     don't reserver the color object in a 2D array, 
+ *     because an object occupies much more memory space.
+ *  2. To get the color info from RGB, use bit shift operation, for example:
+ *     {@code int rgb = picture.get(x, y).getRGB();}
+ *     {@code int red =   (rgb >> 16) & 0xFF;}
+ *     {@code int green = (rgb >> 8) & 0xFF;}
+ *     {@code int blue =  (rgb >> 0) & 0xFF;}
+ *  3. Refer to the AcyclicSP.java and make sure to understand the topological sort algorithm 
+ *     for computing a shortest path in a DAG.
+ *  4. To find a minimum energy seam in method {@code findVerticalSeam()}, 
+ *     use {@code distTo[width][height])} to record the minimum energy 
+ *     from top row to the current pixel, similarly to find the shortest path in a DAG;
+ *     and use {@code egdeTo[width][height])} to record the parent pixel for tracking back.
+ *  <p>
+ *  For additional documentation, see
+ *  <i>/specifications/specification-Programming_Assignment 2_ SeamCarving.html</i>
+ *  <i>/specifications/Checklists-Programming_Assignment 2_ SeamCarving.html</i>
+ *  
+ *  @author Chihkai Sun, email: jksuan@163.com
+ *  @date 29th May 2018
+ *  
+ */
 
 public class SeamCarver {
   private final Picture picture;
   private int width;     // width of current picture
   private int height;    // height of current picture  
-  private Color[][] initColors; // preserve the color info of the current picture
-  private double[][] initEnergies;
+  private int[][] initRGB; // reserve the RGB info of the current picture  
   
-  // create a seam carver object based on the given picture
+  /**
+   * Constructor
+   * Create a seam carver object based on the given picture
+   * 
+   * @param picture the given {@code picture}
+   * @throws IllegalArgumentException if the {@code picture} is null
+   */
   public SeamCarver(Picture picture) {
-    this.picture = new Picture(picture);
+    if (picture == null) {
+      throw new IllegalArgumentException("constructor must be called with a non-null argument");
+    }
+    this.picture = new Picture(picture); // deep copy the picture object
     this.width = picture.width();
     this.height = picture.height();
-    initColors = getPixelValueFromInitPic(width, height); 
-    initEnergies = getEnergyFromInitPic(width, height);    
+    initRGB = getPixelValueFromInitPic(width, height);  
   }
   
-  private Color[][] getPixelValueFromInitPic(int width, int height) {
-    Color[][] colors = new Color[width][height];
+  private int[][] getPixelValueFromInitPic(int width, int height) {
+    int[][] rgb = new int[width][height];
     for (int col = 0; col < width; col++) {
       for (int row = 0; row < height; row++) {
-        colors[col][row] = picture.get(col, row); // col = x, row = y
+        rgb[col][row] = picture.get(col, row).getRGB(); // col = x, row = y
       }
     }
-    return colors;
+    return rgb;
   }
-  
-  private double[][] getEnergyFromInitPic(int width, int height) {
-    double[][] energies = new double[width][height];
-    for (int col = 0; col < width; col++) {
-      for (int row = 0; row < height; row++) {
-          energies[col][row] = energy(col, row);
-      }
-    }
-    return energies;
-  }
-  
-  //current picture
+        
+  /**
+   * Creates a new picture and returns it
+   * 
+   * @return the new picture
+   */
   public Picture picture() {
     Picture pic = new Picture(width, height);
     for (int col = 0; col < width; col++) {
       for (int row = 0; row < height; row++) {
-        Color color = initColors[col][row];
+        Color color = new Color(initRGB[col][row]);
         pic.set(col, row, color);
       }
     }
     return pic;
   }
   
-  //width of current picture
+  
+  /**
+   * Returns the width of current picture
+   * 
+   * @return the width of current picture
+   */
   public int width() {
     return this.width;
   }
   
-  //height of current picture
+  /**
+   * Returns the height of current picture
+   * 
+   * @return the height of current picture
+   */
   public int height() {
     return this.height;
   }
   
   private double xGradient(int x, int y) {    
-    Color left = initColors[x - 1][y]; //getPixelColor(x - 1, y);picture.get(x - 1, y)
-    int lRed = left.getRed();      // the red color of left of the current pixel
-    int lGreen = left.getGreen();
-    int lBlue = left.getBlue();
+    int left = initRGB[x - 1][y]; 
+    int lRed = (left >> 16) & 0xFF;  // get the red value 
+    int lGreen = (left >> 8) & 0xFF; // get the green value 
+    int lBlue = (left >> 0) & 0xFF;  // get the blue value 
     
-    Color right = initColors[x + 1][y]; //getPixelColor(x + 1, y); picture.get(x + 1, y)
-    int rRed = right.getRed();     // the red color of right of the current pixel
-    int rGreen = right.getGreen();
-    int rBlue = right.getBlue();
+    int right = initRGB[x + 1][y]; 
+    int rRed = (right >> 16) & 0xFF;   
+    int rGreen = (right >> 8) & 0xFF;
+    int rBlue = (right >> 0) & 0xFF;
     
     return Math.pow(rRed - lRed, 2) + Math.pow(rGreen - lGreen, 2) + Math.pow(rBlue - lBlue, 2);
   }
   
   private double yGradient(int x, int y) {    
-    Color down = initColors[x][y - 1]; // getPixelColor(x, y - 1);  picture.get(x, y - 1)
-    int dRed = down.getRed();
-    int dGreen = down.getGreen();
-    int dBlue = down.getBlue();
+    int down = initRGB[x][y - 1]; 
+    int dRed = (down >> 16) & 0xFF;
+    int dGreen = (down >> 8) & 0xFF;
+    int dBlue = (down >> 0) & 0xFF;
     
-    Color up = initColors[x][y + 1]; // getPixelColor(x, y + 1);  picture.get(x, y + 1)
-    int uRed = up.getRed();
-    int uGreen = up.getGreen();
-    int uBlue = up.getBlue();
+    int up = initRGB[x][y + 1]; 
+    int uRed = (up >> 16) & 0xFF;
+    int uGreen = (up >> 8) & 0xFF;
+    int uBlue = (up >> 0) & 0xFF;
     
     return Math.pow(dRed - uRed, 2) + Math.pow(dGreen - uGreen, 2) + Math.pow(dBlue - uBlue, 2);
   }
@@ -97,8 +146,16 @@ public class SeamCarver {
     if (x < 0 || x >= width())
       throw new IllegalArgumentException("x must be between 0 and " + (width() - 1) + ": " + x);      
   }
-  
-  // energy of pixel at column x and row y of current picture
+    
+  /**
+   * Calculate the energy of pixel at column x and row y of current picture
+   * 
+   * @param x the column
+   * @param y the row 
+   * @return the energy of pixel 
+   * @throws IllegalArgumentException if {@code x} is not between 0 and {@code width() - 1}
+   * @throws IllegalArgumentException if {@code y} is not between 0 and {@code height() - 1}
+   */
   public double energy(int x, int y) {
     validateRow(y);
     validateCol(x);
@@ -109,51 +166,32 @@ public class SeamCarver {
     return Math.sqrt(xGradient(x, y) + yGradient(x, y));
   }
   
-  /**
-   * transpose the pixel value of the current picture
-   * 
-   * @param width
-   * @param height
-   */
-  private Color[][] transposePixelValue(int width, int height) {
-    Color[][] colors = new Color[width][height];
+  // swap the width and height of the initRGB array 
+  private int[][] transposePixelValue(int width, int height) {
+    int[][] rgb = new int[width][height];
     for (int col = 0; col < width; col++) {
       for (int row = 0; row < height; row++) {
-        colors[col][row] = this.initColors[row][col]; // swap the row and col
+        rgb[col][row] = this.initRGB[row][col]; // swap the row and col
       }
     }
-    return colors;
+    return rgb;
   }  
   
-  /**
-   * transpose the energy of the current picture
-   * 
-   * @param width
-   * @param height
-   */
-  private double[][] transposeEnergy(int width, int height) {
-    double[][] energies = new double[width][height];
-    for (int col = 0; col < width; col++) {
-      for (int row = 0; row < height; row++) {
-        energies[col][row] = this.initEnergies[row][col];
-      }
-    }
-    return energies;
-  }
-  
-  /**
-   * transpose the color and energy array of the picture, 
-   * not truly transpose the picture
-   * swap the width and the height in calling method
-   */
+  // Transpose RGB array of the picture, 
+  // not truly transpose the picture
+  // Swap the width and the height in calling method
   private void transposePic(int width, int height) {  
     this.width = width;
     this.height = height;
-    this.initColors = transposePixelValue(width, height); 
-    this.initEnergies = transposeEnergy(width, height); // recalculate and reserve the energy    
+    this.initRGB = transposePixelValue(width, height);     
   }
   
-  //sequence of indices for horizontal seam
+  /**
+   * Find the horizontal seam of minimal energy
+   * Transpose the picture, call {@code findVerticalSeam()}, and transpose it back
+   * 
+   * @return sequence of indices for horizontal seam
+   */
   public int[] findHorizontalSeam() {
     int tmpWidth = this.width;
     int tmpHeight = this.height;
@@ -166,11 +204,17 @@ public class SeamCarver {
     return seam;
   }  
   
-  //sequence of indices for vertical seam 
+  
+  /**
+   * Find the vertical seam of minimal energy
+   * Refer to the topological.java 
+   * 
+   * @return sequence of indices for vertical seam
+   */
   public int[] findVerticalSeam() {
     int[] seam = new int[height];    
-    int[][] edgeTo = new int[width][height];
-    double[][] distTo = new double[width][height];
+    int[][] edgeTo = new int[width][height];       // the column of parent pixel of the current pixel
+    double[][] distTo = new double[width][height]; // minimal energy from the first row to the current pixel
     
     for (int col = 0; col < width; col++) {
       for (int row = 0; row < height; row++) {
@@ -191,29 +235,22 @@ public class SeamCarver {
           pos = 0;
         }
         for (; pos < col + 2; pos++) {
-          if (distTo[pos][row + 1] > distTo[col][row] + initEnergies[pos][row + 1]) {
-            distTo[pos][row + 1] = distTo[col][row] + initEnergies[pos][row + 1];
-            edgeTo[pos][row + 1] = col; // record the parent point  
+          if (distTo[pos][row + 1] > distTo[col][row] + energy(pos, row + 1)) {
+            distTo[pos][row + 1] = distTo[col][row] + energy(pos, row + 1);
+            edgeTo[pos][row + 1] = col; // record the column of parent pixel 
           }
         } // end pos
       } // end col
     } // end row
     
-    /*for (int row = 0; row < height; row++) {
+    /* for (int row = 0; row < height; row++) {
       for (int col = 0; col < width; col++) {
         System.out.print(distTo[col][row] + " ");
       }
       System.out.println();
-    }
+    } */
     
-    System.out.println();
-    for (int row = 0; row < height; row++) {
-      for (int col = 0; col < width; col++) {
-        System.out.print(edgeTo[col][row] + " ");
-      }
-      System.out.println();
-    }*/
-    
+    // find the column of the minimum energy at the bottom row
     double minEnergy = distTo[0][height - 1];
     int bottomPoint = 0;
     for (int col = 0; col < width; col++) {
@@ -223,6 +260,7 @@ public class SeamCarver {
       }
     }
     
+    // track back from the bottom
     Stack<Integer> reverseSeam = new Stack<Integer>();
     reverseSeam.push(bottomPoint);
     for (int row = height - 1; row > 0; row--) {
@@ -230,6 +268,7 @@ public class SeamCarver {
       reverseSeam.push(edgeTo[otherPoint][row]);
     }
     
+    // construct the seam
     for (int row = 0; row < height; row++) {
       seam[row] = reverseSeam.pop();
     }   
@@ -248,8 +287,8 @@ public class SeamCarver {
       throw new IllegalArgumentException("Vertical seam must not be null");
     }
     
-    if (seam.length > height())
-      throw new IllegalArgumentException("length of vertical seam must be <= " + height() + ": " + seam.length);
+    if (seam.length != height())
+      throw new IllegalArgumentException("length of vertical seam must be = " + height() + ": " + seam.length);
     
     for (int i = 0; i < seam.length; i++) {
       if (seam[i] < 0 || seam[i] >= width())
@@ -264,34 +303,33 @@ public class SeamCarver {
     }    
   }
   
-  // remove vertical seam from current picture
+  /**
+   * Remove vertical seam from current picture
+   * Work for any valid seam(not only the minimum energy seams)
+   * 
+   * @param seam sequence of indices for vertical seam
+   * @throws IllegalArgumentException if the {@code seam} width of picture is less than 1
+   * @throws IllegalArgumentException if the {@code seam} is null
+   * @throws IllegalArgumentException if the length of {@code seam} doesn't equal the height of the picture
+   * @throws IllegalArgumentException if an entry of {@code seam} is not between 0 and {@code width() - 1}
+   * @throws IllegalArgumentException if two adjacent entries of {@code seam} differ by more than 1
+   */
   public void removeVerticalSeam(int[] seam) {
     validatePictureWidth();
     validateVerticalSeam(seam);
     int tmpWidth = this.width;
     int tmpHeight = this.height;
     
-    /**
-     * remove the seam, copy the array from right to left
-     */    
+    // remove the seam, copy the array from right to left
     transposePic(tmpHeight, tmpWidth);
     for (int row = 0; row < seam.length; row++) {
       int srcPos = seam[row] + 1;
       int destPos = seam[row];
       int length = tmpWidth - seam[row] - 1;
-      System.arraycopy(initColors[row], srcPos, initColors[row], destPos, length);
-      System.arraycopy(initEnergies[row], srcPos, initEnergies[row], destPos, length);
+      System.arraycopy(initRGB[row], srcPos, initRGB[row], destPos, length);
     }    
     transposePic(tmpWidth, tmpHeight);
-
-    /**
-     *  recalculate the energy for the pixels along the seam that was just removed
-     *  but no other energies will change
-     */
-    for (int row = 0; row < seam.length; row++) {
-      int col = seam[row];
-      initEnergies[col][row] = energy(col, row);
-    }
+    
     this.width--;
   }
   
@@ -306,8 +344,8 @@ public class SeamCarver {
       throw new IllegalArgumentException("Vertical seam must not be null");
     }
     
-    if (seam.length > width())
-      throw new IllegalArgumentException("length of vertical seam must be <= " + width() + ": " + seam.length);
+    if (seam.length != width())
+      throw new IllegalArgumentException("length of vertical seam must be = " + width() + ": " + seam.length);
     
     for (int i = 0; i < seam.length; i++) {
       if (seam[i] < 0 || seam[i] >= height())
@@ -322,7 +360,18 @@ public class SeamCarver {
     }    
   }
   
-  //remove horizontal seam from current picture
+  
+  /**
+   * Remove horizontal seam from current picture
+   * Work for any valid seam(not only the minimum energy seams)
+   * 
+   * @param seam sequence of indices for horizontal seam
+   * @throws IllegalArgumentException if the height of picture is less than 1
+   * @throws IllegalArgumentException if the {@code seam} is null
+   * @throws IllegalArgumentException if the length of {@code seam} doesn't equal the width of the picture
+   * @throws IllegalArgumentException if an entry of {@code seam} is not between 0 and {@code height() - 1}
+   * @throws IllegalArgumentException if two adjacent entries of {@code seam} differ by more than 1
+   */
   public void removeHorizontalSeam(int[] seam) {
     validatePictureHeight();
     validateHorizontalSeam(seam);
@@ -331,18 +380,18 @@ public class SeamCarver {
       int srcPos = seam[col] + 1;
       int destPos = seam[col];
       int length = height - seam[col] - 1;
-      System.arraycopy(initColors[col], srcPos, initColors[col], destPos, length);
-      System.arraycopy(initEnergies[col], srcPos, initEnergies[col], destPos, length);
+      System.arraycopy(initRGB[col], srcPos, initRGB[col], destPos, length);
     }    
     
-    for (int col = 0; col < seam.length; col++) {
-      int row = seam[col];
-      initEnergies[col][row] = energy(col, row);
-    }    
     this.height--;
   }
    
-  // unit test
+  
+  /**
+   * Unit tests the {@code picture} data type.
+   *
+   * @param args the command-line arguments
+   */
   public static void main(String[] args) {
     Picture picture = new Picture("seam-testing/6x5.png");
     int width  = picture.width();
@@ -351,14 +400,8 @@ public class SeamCarver {
     int[] seam = new int[height];
     seam = sc.findVerticalSeam(); 
     sc.removeVerticalSeam(seam);
-    // convert to grayscale
-    /* for (int col = 0; col < width; col++) {
-        for (int row = 0; row < height; row++) {
-            Color color = picture.get(col, row);
-            Color gray = Luminance.toGray(color);
-            picture.set(col, row, gray);
-        }
-    }
-    picture.show(); */
+    picture = sc.picture();
+   
+    picture.show();
   }
 }
